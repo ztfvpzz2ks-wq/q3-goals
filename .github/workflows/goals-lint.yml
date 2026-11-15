@@ -1,0 +1,45 @@
+name: Goals Lint
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  pull_request:
+    types: [opened, edited, reopened]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Check goal issues have a deadline and an owner
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const payload = context.payload;
+            const issue = payload.issue || {};
+            const body = issue.body || '';
+            const labels = (issue.labels || []).map(l => (l.name || '').toLowerCase());
+            if (!labels.includes('goal')) {
+              core.info('Not a goal issue, nothing to check.');
+              return;
+            }
+
+            const problems = [];
+            const dueMatch = body.match(/due date[\s\S]*?\n+\s*(.+)/i);
+            const due = dueMatch ? dueMatch[1].trim() : '';
+            if (!due) {
+              problems.push('missing a **Due date**');
+            } else if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) {
+              problems.push(`due date "${due}" is not ISO format (YYYY-MM-DD)`);
+            }
+            if (!/@/.test(body)) {
+              problems.push('missing an **Owner** (@username)');
+            }
+
+            if (problems.length) {
+              core.setFailed('Goal check failed: ' + problems.join('; '));
+              return;
+            }
+            core.info('Goal issue looks well formed.');
